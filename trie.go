@@ -29,6 +29,9 @@ func (t *trie) add(r *route) error {
 func (t *trie) get(path string) (*routeWithParam, error) {
 	var err error
 
+	// Treat "/some//path" as "/some/path" in dispatching route
+	path = strings.Replace(path, "//", "/", -1)
+
 	// Treat "/some-path/" as "/some-path" in dispatching route.
 	// But treat "/" as "/".
 	if path != "/" {
