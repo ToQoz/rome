@@ -28,6 +28,18 @@ func (t *trie) add(r *route) error {
 
 func (t *trie) get(path string) (*routeWithParam, error) {
 	var err error
+
+	// Treat "/some-path/" as "/some-path" in dispatching route.
+	// But treat "/" as "/".
+	if path != "/" {
+		paths := strings.Split(path, "")
+		lastIndex := len(paths) - 1
+
+		if paths[lastIndex] == "/" {
+			path = strings.Join(paths[0:lastIndex], "")
+		}
+	}
+
 	matched := t.root.get(path, []string{})
 
 	// Route not found

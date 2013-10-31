@@ -37,6 +37,9 @@ func TestTrie(t *testing.T) {
 	matched, _ = tr.get("/users")
 	test_helpers.AssertEqual(t, matched.route.pattern, "/users")
 
+	matched, _ = tr.get("/users/")
+	test_helpers.AssertEqual(t, matched.route.pattern, "/users")
+
 	matched, _ = tr.get("/users/1")
 	test_helpers.AssertEqual(t, matched.route.pattern, "/users/:id")
 	test_helpers.AssertEqual(t, "1", matched.params["id"])
