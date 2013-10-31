@@ -1,5 +1,7 @@
 ## Rome
 
+[![Build Status](https://travis-ci.org/ToQoz/rome.png?branch=master)](https://travis-ci.org/ToQoz/rome)
+
 !!! under development !!!
 
 Rome is http router for golang
