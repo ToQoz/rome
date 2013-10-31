@@ -1,0 +1,13 @@
+language: go
+go:
+  - 1.1.1
+  - 1.1
+  - tip
+install: go get -v ./...
+script: go test -v ./...
+notifications:
+  email:
+    recipients:
+      - toqoz403@gmail.com
+    on_success: change
+    on_failure: always
