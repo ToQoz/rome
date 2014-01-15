@@ -7,6 +7,7 @@ import (
 
 type Router struct {
 	tries           map[string]*trie
+	NotFoundHandler http.Handler
 }
 
 func NewRouter() *Router {
@@ -48,7 +49,11 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	http.NotFoundHandler().ServeHTTP(w, req)
+	if router.NotFoundHandler != nil {
+		router.NotFoundHandler.ServeHTTP(w, req)
+	} else {
+		http.NotFoundHandler().ServeHTTP(w, req)
+	}
 }
 
 func (router *Router) handle(_method string, pattern string, handler http.Handler) {
