@@ -7,11 +7,10 @@ import (
 
 type Router struct {
 	tries           map[string]*trie
-	notFoundHandler notFoundHandler
 }
 
 func NewRouter() *Router {
-	return &Router{tries: map[string]*trie{}, notFoundHandler: notFoundHandler{}}
+	return &Router{tries: map[string]*trie{}}
 }
 
 func (router *Router) Get(pattern string, handler http.Handler) {
@@ -49,7 +48,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	router.notFoundHandler.ServeHTTP(w, req)
+	http.NotFoundHandler().ServeHTTP(w, req)
 }
 
 func (router *Router) handle(_method string, pattern string, handler http.Handler) {

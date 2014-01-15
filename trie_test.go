@@ -96,3 +96,31 @@ func TestTrie(t *testing.T) {
 	test_helpers.AssertEqual(t, matched.route.pattern, "/users/login/posts/:id")
 	test_helpers.AssertEqual(t, "1", matched.params["id"])
 }
+
+var (
+	tr = newTrie()
+)
+
+func init() {
+	tr.add(newRoute("/users", handler))
+	tr.add(newRoute("/users/:id", handler))
+	tr.add(newRoute("/users/:user_id/posts", handler))
+	tr.add(newRoute("/users/:user_id/posts/:id", handler))
+	tr.add(newRoute("/users/:user_id/posts/latest", handler))
+	tr.add(newRoute("/users/:user_id/:content_kind", handler))
+	tr.add(newRoute("/users/:user_id/:content_kind/:id", handler))
+	tr.add(newRoute("/users/:user_id/:content_kind/latest", handler))
+	tr.add(newRoute("/users/:user_id/parts", handler))
+	tr.add(newRoute("/users/:user_id/parts/:id", handler))
+	tr.add(newRoute("/users/:user_id/parts/latest", handler))
+	tr.add(newRoute("/users/login/posts", handler))
+	tr.add(newRoute("/users/login/posts/:id", handler))
+}
+
+func BenchmarkTrie(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		tr.get("/users/login/posts/1")
+		tr.get("/users")
+		tr.get("/NOT_FOUND")
+	}
+}
