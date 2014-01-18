@@ -77,16 +77,17 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	r, err = router.tries[method].get(req.URL.Path)
 
-	if err == nil {
-		r.serveHTTP(w, req)
+	if err != nil {
+		if router.NotFoundHandler != nil {
+			router.NotFoundHandler.ServeHTTP(w, req)
+			return
+		}
+
+		http.NotFoundHandler().ServeHTTP(w, req)
 		return
 	}
 
-	if router.NotFoundHandler != nil {
-		router.NotFoundHandler.ServeHTTP(w, req)
-	} else {
-		http.NotFoundHandler().ServeHTTP(w, req)
-	}
+	r.serveHTTP(w, req)
 }
 
 // --- Private methods ---
