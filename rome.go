@@ -63,17 +63,23 @@ func (router *Router) DeleteFunc(pattern string, f func(http.ResponseWriter, *ht
 	router.Delete(pattern, http.HandlerFunc(f))
 }
 
+// --- rome.Router work as http.Handler ---
+
 func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var err error
 	var r *routeWithParam
 
-	if router.tries[req.Method] != nil {
-		r, err = router.tries[req.Method].get(req.URL.Path)
+	method := strings.ToUpper(req.Method)
 
-		if err == nil {
-			r.serveHTTP(w, req)
-			return
-		}
+	if method == "" {
+		method = "GET"
+	}
+
+	r, err = router.tries[method].get(req.URL.Path)
+
+	if err == nil {
+		r.serveHTTP(w, req)
+		return
 	}
 
 	if router.NotFoundHandler != nil {
@@ -83,8 +89,10 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (router *Router) handle(_method string, pattern string, handler http.Handler) {
-	method := strings.ToUpper(_method)
+// --- Private methods ---
+
+func (router *Router) handle(method string, pattern string, handler http.Handler) {
+	method = strings.ToUpper(method)
 
 	if router.tries[method] == nil {
 		router.tries[method] = newTrie()
