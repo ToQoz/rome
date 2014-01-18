@@ -11,7 +11,14 @@ type Router struct {
 }
 
 func NewRouter() *Router {
-	return &Router{tries: map[string]*trie{}}
+	router := &Router{tries: map[string]*trie{}}
+	router.tries["GET"] = newTrie()
+	router.tries["HEAD"] = newTrie()
+	router.tries["POST"] = newTrie()
+	router.tries["PUT"] = newTrie()
+	router.tries["DELETE"] = newTrie()
+
+	return router
 }
 
 // --- Routing Helper ---
@@ -28,12 +35,10 @@ func (router *Router) NotFoundFunc(handlerFunc func(http.ResponseWriter, *http.R
 // GET
 func (router *Router) Get(pattern string, handler http.Handler) {
 	router.handle("GET", pattern, handler)
-	router.handle("HEAD", pattern, handler)
 }
 
 func (router *Router) GetFunc(pattern string, f func(http.ResponseWriter, *http.Request)) {
 	router.Get(pattern, http.HandlerFunc(f))
-	router.Head(pattern, http.HandlerFunc(f))
 }
 
 // HEAD
@@ -75,16 +80,18 @@ func (router *Router) DeleteFunc(pattern string, f func(http.ResponseWriter, *ht
 // --- rome.Router work as http.Handler ---
 
 func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	var err error
-	var r *routeWithParam
-
 	method := strings.ToUpper(req.Method)
 
 	if method == "" {
 		method = "GET"
 	}
 
-	r, err = router.tries[method].get(req.URL.Path)
+	r, err := router.tries[method].get(req.URL.Path)
+
+	// if GET method respond, HEAD method should respond too.
+	if err != nil && method == "HEAD" {
+		r, err = router.tries["GET"].get(req.URL.Path)
+	}
 
 	if err != nil {
 		if router.notFoundHandler != nil {
@@ -102,11 +109,5 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // --- Private methods ---
 
 func (router *Router) handle(method string, pattern string, handler http.Handler) {
-	method = strings.ToUpper(method)
-
-	if router.tries[method] == nil {
-		router.tries[method] = newTrie()
-	}
-
-	router.tries[method].add(newRoute(pattern, handler))
+	router.tries[strings.ToUpper(method)].add(newRoute(pattern, handler))
 }
