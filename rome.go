@@ -7,7 +7,7 @@ import (
 
 type Router struct {
 	tries           map[string]*trie
-	NotFoundHandler http.Handler
+	notFoundHandler http.Handler
 }
 
 func NewRouter() *Router {
@@ -15,6 +15,15 @@ func NewRouter() *Router {
 }
 
 // --- Routing Helper ---
+
+// Not Found
+func (router *Router) NotFound(handler http.Handler) {
+	router.notFoundHandler = handler
+}
+
+func (router *Router) NotFoundFunc(handlerFunc func(http.ResponseWriter, *http.Request)) {
+	router.NotFound(http.HandlerFunc(handlerFunc))
+}
 
 // GET
 func (router *Router) Get(pattern string, handler http.Handler) {
@@ -78,8 +87,8 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r, err = router.tries[method].get(req.URL.Path)
 
 	if err != nil {
-		if router.NotFoundHandler != nil {
-			router.NotFoundHandler.ServeHTTP(w, req)
+		if router.notFoundHandler != nil {
+			router.notFoundHandler.ServeHTTP(w, req)
 			return
 		}
 
