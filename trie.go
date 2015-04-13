@@ -43,7 +43,7 @@ func (t *trie) get(path string) (*routeWithParam, error) {
 		}
 	}
 
-	matched := t.root.get(path, []string{})
+	matched := t.root.get(path, []string{}, []string{})
 
 	// Route not found
 	if matched == nil {
@@ -67,6 +67,7 @@ type node struct {
 	route      *route
 	children   map[string]*node
 	paramChild *node
+	splatChild *node
 }
 
 func newNode() *node {
@@ -88,7 +89,8 @@ func (n *node) add(path string, r *route, paramKeys []string) error {
 	token, tail := firstToken(path)
 
 	// :param branch
-	if token == ":" {
+	switch token {
+	case ":":
 		var pkey string
 
 		if n.paramChild == nil {
@@ -100,6 +102,13 @@ func (n *node) add(path string, r *route, paramKeys []string) error {
 		paramKeys = append(paramKeys, pkey)
 
 		return n.paramChild.add(tail, r, paramKeys)
+	case "*":
+		if n.splatChild == nil {
+			n.splatChild = newNode()
+		}
+
+		_, tail = firstSegments(tail)
+		return n.splatChild.add(tail, r, paramKeys)
 	}
 
 	// Main branches
@@ -114,12 +123,12 @@ func (n *node) add(path string, r *route, paramKeys []string) error {
 	return n.children[token].add(tail, r, paramKeys)
 }
 
-func (n *node) get(path string, paramValues []string) *routeWithParam {
+func (n *node) get(path string, paramValues []string, splat []string) *routeWithParam {
 	// Finish to consume path
 	if path == "" {
 		if n.route != nil {
 			// Found route!
-			return newRouteWithParam(n.route, paramValues)
+			return newRouteWithParam(n.route, paramValues, splat)
 		} else {
 			// Not found!
 			return nil
@@ -130,10 +139,30 @@ func (n *node) get(path string, paramValues []string) *routeWithParam {
 	token, tail := firstToken(path)
 
 	if n.children[token] != nil {
-		match := n.children[token].get(tail, paramValues)
+		match := n.children[token].get(tail, paramValues, splat)
 
 		if match != nil {
 			// Found route in main branches!
+			return match
+		}
+	}
+
+	// Search splat branch
+	if n.splatChild != nil {
+		var match *routeWithParam
+
+		if n.splatChild.children == nil &&
+			n.splatChild.paramChild == nil &&
+			n.splatChild.splatChild == nil {
+			match = n.splatChild.get("", paramValues, append(splat, path))
+		} else {
+			var s string
+			s, tail = firstSegments(path)
+			match = n.splatChild.get(tail, paramValues, append(splat, s))
+		}
+
+		if match != nil {
+			// Found route in splat branch!
 			return match
 		}
 	}
@@ -144,7 +173,7 @@ func (n *node) get(path string, paramValues []string) *routeWithParam {
 
 		pvalue, tail = firstSegments(path)
 
-		match := n.paramChild.get(tail, append(paramValues, pvalue))
+		match := n.paramChild.get(tail, append(paramValues, pvalue), splat)
 
 		if match != nil {
 			// Found route in param branch!
@@ -196,20 +225,20 @@ type routeWithParam struct {
 	route       *route
 	paramValues []string
 	params      map[string]string
+	splat       []string
 }
 
-func newRouteWithParam(r *route, paramValues []string) *routeWithParam {
-	return &routeWithParam{route: r, paramValues: paramValues}
+func newRouteWithParam(r *route, paramValues []string, splat []string) *routeWithParam {
+	return &routeWithParam{route: r, paramValues: paramValues, splat: splat}
 }
 
 func (rp *routeWithParam) serveHTTP(w http.ResponseWriter, req *http.Request) {
-	params := req.URL.Query()
-
+	req.ParseForm()
 	for pkey, pvalue := range rp.params {
-		params[pkey] = append(params[pkey], pvalue)
+		req.Form.Add(pkey, pvalue)
 	}
-
-	req.URL.RawQuery = params.Encode()
-
+	for _, s := range rp.splat {
+		req.Form.Add("splat", s)
+	}
 	rp.route.handler.ServeHTTP(w, req)
 }
