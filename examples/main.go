@@ -23,15 +23,23 @@ func main() {
 	}))
 
 	router.Get("/posts/:id", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("/posts/:id\n"))
-		w.Write([]byte(fmt.Sprintf("FromValue(\"id\"): %s\n", r.FormValue("id"))))
+		params := rome.PathParams(r)
+		w.Write([]byte("/posts/:id"))
+		w.Write([]byte{'\n'})
+		w.Write([]byte(fmt.Sprintf(`Params.Value("id"): %s`, params.Value("id"))))
+		w.Write([]byte{'\n'})
 	}))
 
-	router.Get("/x/:id/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("/x/:id/*\n"))
-		w.Write([]byte(fmt.Sprintf("FromValue(\"id\"): %s\n", r.FormValue("id"))))
-		w.Write([]byte(fmt.Sprintf("FromValue(\"splat\"): %s\n", r.FormValue("splat"))))
-		w.Write([]byte(fmt.Sprintf("From[\"splat\"]: %s\n", r.Form["splat"])))
+	router.Get("/x/:id/*/*.*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := rome.PathParams(r)
+		w.Write([]byte("/x/:id/*"))
+		w.Write([]byte{'\n'})
+		w.Write([]byte(fmt.Sprintf(`Params.Value("id"): %s`, params.Value("id"))))
+		w.Write([]byte{'\n'})
+		w.Write([]byte(fmt.Sprintf(`Params.Value("splat"): %s`, params.Value("splat"))))
+		w.Write([]byte{'\n'})
+		w.Write([]byte(fmt.Sprintf(`Params.Values("splat"): %q`, params.Values("splat"))))
+		w.Write([]byte{'\n'})
 	}))
 
 	log.Printf("Listen and Serve, %q", addr)

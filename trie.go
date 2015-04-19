@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	segmentSeparater = "/."
+	MaxParam = 5
 )
 
 // ----------------------------------------------------------------------------
@@ -35,25 +35,14 @@ func (t *trie) get(path string) (*routeWithParam, error) {
 	// Treat "/some-path/" as "/some-path" in dispatching route.
 	// But treat "/" as "/".
 	if path != "/" {
-		paths := strings.Split(path, "")
-		lastIndex := len(paths) - 1
-
-		if paths[lastIndex] == "/" {
-			path = strings.Join(paths[0:lastIndex], "")
-		}
+		path = strings.TrimSuffix(path, "/")
 	}
 
-	matched := t.root.get(path, []string{}, []string{})
+	matched := t.root.get(path, make([]string, MaxParam), 0)
 
 	// Route not found
 	if matched == nil {
 		err = errors.New("Not found")
-	} else {
-		matched.params = map[string]string{}
-
-		for i, pkey := range matched.route.paramKeys {
-			matched.params[pkey] = matched.paramValues[i]
-		}
 	}
 
 	return matched, err
@@ -65,7 +54,7 @@ func (t *trie) get(path string) (*routeWithParam, error) {
 
 type node struct {
 	route      *route
-	children   map[string]*node
+	children   map[rune]*node
 	paramChild *node
 	splatChild *node
 }
@@ -76,7 +65,7 @@ func newNode() *node {
 
 func (n *node) add(path string, r *route, paramKeys []string) error {
 	// Finish to consume path
-	if path == "" {
+	if len(path) == 0 {
 		if n.route != nil {
 			return errors.New("Deplicated routing")
 		}
@@ -86,11 +75,12 @@ func (n *node) add(path string, r *route, paramKeys []string) error {
 		return nil
 	}
 
-	token, tail := firstToken(path)
+	token := rune(path[0])
+	tail := path[1:]
 
 	// :param branch
 	switch token {
-	case ":":
+	case ':':
 		var pkey string
 
 		if n.paramChild == nil {
@@ -98,22 +88,21 @@ func (n *node) add(path string, r *route, paramKeys []string) error {
 		}
 
 		pkey, tail = firstSegments(tail)
-
 		paramKeys = append(paramKeys, pkey)
-
 		return n.paramChild.add(tail, r, paramKeys)
-	case "*":
+	case '*':
 		if n.splatChild == nil {
 			n.splatChild = newNode()
 		}
 
 		_, tail = firstSegments(tail)
+		paramKeys = append(paramKeys, "splat")
 		return n.splatChild.add(tail, r, paramKeys)
 	}
 
 	// Main branches
 	if n.children == nil {
-		n.children = map[string]*node{}
+		n.children = map[rune]*node{}
 	}
 
 	if n.children[token] == nil {
@@ -123,12 +112,12 @@ func (n *node) add(path string, r *route, paramKeys []string) error {
 	return n.children[token].add(tail, r, paramKeys)
 }
 
-func (n *node) get(path string, paramValues []string, splat []string) *routeWithParam {
+func (n *node) get(path string, paramValues []string, paramValueN int) *routeWithParam {
 	// Finish to consume path
-	if path == "" {
+	if len(path) == 0 {
 		if n.route != nil {
 			// Found route!
-			return newRouteWithParam(n.route, paramValues, splat)
+			return newRouteWithParam(n.route, paramValues)
 		} else {
 			// Not found!
 			return nil
@@ -136,11 +125,11 @@ func (n *node) get(path string, paramValues []string, splat []string) *routeWith
 	}
 
 	// Search main branch
-	token, tail := firstToken(path)
+	token := rune(path[0])
+	tail := path[1:]
 
 	if n.children[token] != nil {
-		match := n.children[token].get(tail, paramValues, splat)
-
+		match := n.children[token].get(tail, paramValues, paramValueN)
 		if match != nil {
 			// Found route in main branches!
 			return match
@@ -154,11 +143,13 @@ func (n *node) get(path string, paramValues []string, splat []string) *routeWith
 		if n.splatChild.children == nil &&
 			n.splatChild.paramChild == nil &&
 			n.splatChild.splatChild == nil {
-			match = n.splatChild.get("", paramValues, append(splat, path))
+			paramValues[paramValueN] = path
+			paramValueN++
+			match = n.splatChild.get("", paramValues, paramValueN)
 		} else {
-			var s string
-			s, tail = firstSegments(path)
-			match = n.splatChild.get(tail, paramValues, append(splat, s))
+			paramValues[paramValueN], tail = firstSegments(path)
+			paramValueN++
+			match = n.splatChild.get(tail, paramValues, paramValueN)
 		}
 
 		if match != nil {
@@ -169,12 +160,10 @@ func (n *node) get(path string, paramValues []string, splat []string) *routeWith
 
 	// Search param branch
 	if n.paramChild != nil {
-		var pvalue string
+		paramValues[paramValueN], tail = firstSegments(path)
+		paramValueN++
 
-		pvalue, tail = firstSegments(path)
-
-		match := n.paramChild.get(tail, append(paramValues, pvalue), splat)
-
+		match := n.paramChild.get(tail, paramValues, paramValueN)
 		if match != nil {
 			// Found route in param branch!
 			return match
@@ -189,32 +178,47 @@ func (n *node) get(path string, paramValues []string, splat []string) *routeWith
 // Util method
 // ----------------------------------------------------------------------------
 
-func firstToken(str string) (token string, tail string) {
-	tokens := strings.Split(str, "")
-	token = tokens[0]
-	tail = strings.Join(tokens[1:], "")
+func firstSegments(path string) (head string, tail string) {
+	for i := 0; i < len(path); i++ {
+		b := path[i]
+		if b == '/' || b == '.' {
+			head = path[:i]
+			tail = path[i:]
+			return
+		}
+	}
+	head = path
 	return
 }
 
-func firstSegments(path string) (firstSegments string, tail string) {
-	i := strings.IndexAny(path, segmentSeparater)
+// P is params
+type Params []param
 
-	if i != -1 {
-		// e.g. when tail: "id/content" => firstSegments:  "id"
-		//                              => tail:           "/content"
-		//
-		// e.g. when tail: "id.json"    => firstSegments:  "id"
-		//                              => tail:           ".json"
-		firstSegments = path[:i]
-		tail = path[i:]
-	} else {
-		// e.g. when tail: "id"         => firstSegments:  "id"
-		//                              => tail:           ""
-		firstSegments = path
-		tail = ""
+func (p Params) Value(key string) string {
+	for _, param := range p {
+		if param.name == key {
+			return param.value
+		}
 	}
+	return ""
+}
 
-	return
+func (p Params) Values(key string) []string {
+	i := 0
+	for _, param := range p {
+		if param.name == key {
+			i++
+		}
+	}
+	ret := make([]string, i)
+	i = 0
+	for _, param := range p {
+		if param.name == key {
+			ret[i] = param.value
+			i++
+		}
+	}
+	return ret
 }
 
 // ----------------------------------------------------------------------------
@@ -222,23 +226,23 @@ func firstSegments(path string) (firstSegments string, tail string) {
 // ----------------------------------------------------------------------------
 
 type routeWithParam struct {
-	route       *route
+	*route
 	paramValues []string
-	params      map[string]string
-	splat       []string
 }
 
-func newRouteWithParam(r *route, paramValues []string, splat []string) *routeWithParam {
-	return &routeWithParam{route: r, paramValues: paramValues, splat: splat}
+func newRouteWithParam(r *route, paramValues []string) *routeWithParam {
+	match := &routeWithParam{route: r, paramValues: paramValues}
+	return match
 }
 
 func (rp *routeWithParam) serveHTTP(w http.ResponseWriter, req *http.Request) {
-	req.ParseForm()
-	for pkey, pvalue := range rp.params {
-		req.Form.Add(pkey, pvalue)
+	params := make(Params, len(rp.paramKeys))
+	for i, key := range rp.paramKeys {
+		params[i] = param{name: key, value: rp.paramValues[i]}
 	}
-	for _, s := range rp.splat {
-		req.Form.Add("splat", s)
-	}
-	rp.route.handler.ServeHTTP(w, req)
+
+	setParams(req, params)
+	defer clearParams(req)
+
+	rp.handler.ServeHTTP(w, req)
 }
