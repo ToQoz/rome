@@ -24,7 +24,7 @@ func main() {
 
 	router.Get("/posts/:id", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := rome.PathParams(r)
-		w.Write([]byte("/posts/:id"))
+		w.Write([]byte("pattern: /posts/:id"))
 		w.Write([]byte{'\n'})
 		w.Write([]byte(fmt.Sprintf(`Params.Value("id"): %s`, params.Value("id"))))
 		w.Write([]byte{'\n'})
@@ -32,7 +32,7 @@ func main() {
 
 	router.Get("/x/:id/*/*.*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := rome.PathParams(r)
-		w.Write([]byte("/x/:id/*"))
+		w.Write([]byte("pattern /x/:id/*"))
 		w.Write([]byte{'\n'})
 		w.Write([]byte(fmt.Sprintf(`Params.Value("id"): %s`, params.Value("id"))))
 		w.Write([]byte{'\n'})
